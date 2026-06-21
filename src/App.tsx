@@ -427,11 +427,15 @@ function App() {
             const targetX = target.x;
             const targetY = target.y;
 
-            const dx = targetX - p.x;
-            const dy = targetY - p.y;
-            const distance = Math.sqrt(dx * dx + dy * dy);
+            // LERP追尾 (横X%, 縦Ypx)
+            const nextX = p.x + (targetX - p.x) * 0.15;
+            const nextY = p.y + (targetY - p.y) * 0.15;
 
-            if (distance < 4) {
+            const dx = Math.abs(targetX - p.x); // Xの差 (%)
+            const dy = Math.abs(targetY - p.y); // Yの差 (px)
+
+            // 当たり判定 (X軸差が3.5%未満、かつY軸差が15px未満)
+            if (dx < 3.5 && dy < 15) {
               // 衝突した！
               playSound('hit');
               const hitId = target.id;
@@ -452,12 +456,10 @@ function App() {
               // この弾は消滅するので nextProjectiles に追加しない
             } else {
               // ターゲットに向かって移動
-              const stepX = (dx / distance) * p.speed;
-              const stepY = (dy / distance) * (p.speed * 2.5); // Y方向のスケール補正
               nextProjectiles.push({
                 ...p,
-                x: p.x + stepX,
-                y: p.y + stepY
+                x: nextX,
+                y: nextY
               });
             }
           } else {
@@ -532,9 +534,19 @@ function App() {
       setTimeout(() => {
         setIsEating(false);
       }, 1500);
+
+      // 1.3秒後に自動的に次の問題へ進む！
+      setTimeout(() => {
+        nextQuestion();
+      }, 1300);
     } else {
       playSound('wrong');
       setShowFeedback('wrong');
+
+      // 1.8秒後に自動的に「やりなおし」状態に戻して再入力できるようにする
+      setTimeout(() => {
+        setShowFeedback(null);
+      }, 1800);
     }
   };
 
@@ -833,7 +845,7 @@ function App() {
 
           {/* 式とテーブル */}
           <div className="workspace-section">
-            <div className="formula-display">
+            <div className={`formula-display ${showFeedback === 'correct' ? 'correct-highlight' : ''}`}>
               <div className="num-box target">{currentQuestion.multiplier}</div>
               <div>×</div>
               <div className="num-box target">
@@ -848,7 +860,7 @@ function App() {
             </div>
 
             {/* お皿テーブル (はみ出しバグ修正版) */}
-            <div className="table-area">
+            <div className={`table-area ${showFeedback === 'correct' ? 'correct-highlight' : ''}`}>
               {placedPlates === 0 && (
                 <div className="table-placeholder">
                   下のおさらを タップして テーブルに ならべてね！<br />
@@ -926,31 +938,26 @@ function App() {
             </div>
           </div>
 
-          {/* 正解/不正解時のオーバーレイ */}
+          {/* 簡易お知らせ用フィードバック表示 (1.2秒〜1.8秒で自動消滅) */}
           {showFeedback && (
-            <div className="feedback-overlay">
+            <div className="quick-feedback-overlay">
               {showFeedback === 'correct' ? (
                 <>
-                  <div className="feedback-stamp correct">💮</div>
-                  <div className="feedback-text">
-                    せいかい！<br />
-                    {currentQuestion.multiplier} × {currentQuestion.multiplicand} ＝ {currentQuestion.multiplier * currentQuestion.multiplicand}<br />
-                    （{Array.from({ length: currentQuestion.multiplicand }).map(() => currentQuestion.multiplier).join(' ＋ ')} ＝ {currentQuestion.multiplier * currentQuestion.multiplicand}）
+                  <div className="quick-feedback-text" style={{ color: 'var(--color-success)' }}>
+                    💮 せいかい！
                   </div>
-                  <button className="btn-kids btn-kids-primary" onClick={nextQuestion}>
-                    つぎの もんだい ➡️
-                  </button>
+                  <div className="quick-feedback-sub">
+                    {currentQuestion.multiplier} × {currentQuestion.multiplicand} ＝ {currentQuestion.multiplier * currentQuestion.multiplicand}
+                  </div>
                 </>
               ) : (
                 <>
-                  <div className="feedback-stamp wrong">🤔</div>
-                  <div className="feedback-text">
-                    あれれ？ おさらが {placedPlates > currentQuestion.multiplicand ? 'おおい' : 'すくない'}よ！<br />
-                    もういちど かぞえてみよう！
+                  <div className="quick-feedback-text" style={{ color: 'var(--color-accent)' }}>
+                    🤔 あれれ？
                   </div>
-                  <button className="btn-kids" onClick={() => setShowFeedback(null)}>
-                    やりなおす ↩️
-                  </button>
+                  <div className="quick-feedback-sub">
+                    おさらが {placedPlates > currentQuestion.multiplicand ? 'おおい' : 'すくない'}よ！もういちど！
+                  </div>
                 </>
               )}
             </div>
