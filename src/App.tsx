@@ -71,13 +71,18 @@ function App() {
   const [gameMode, setGameMode] = useState<GameMode>('multiplication');
   const [level, setLevel] = useState<Level>(2);
   
-  // タワーディフェンス関係の状態
+  // タワーディフェンス関係の状態 (State + Ref 同期設計で React 非同期競合バグを100%防止)
   const [enemies, setEnemies] = useState<Enemy[]>([]);
   const [projectiles, setProjectiles] = useState<Projectile[]>([]);
   const [lives, setLives] = useState<number>(3);
   const [wave, setWave] = useState<number>(1);
   const [waveActive, setWaveActive] = useState<boolean>(false);
   const [attackingTower, setAttackingTower] = useState<keyof typeof ANIMALS | null>(null);
+
+  // 競合バグ防止用のリアルタイム状態参照Ref
+  const enemiesRef = useRef<Enemy[]>([]);
+  const projectilesRef = useRef<Projectile[]>([]);
+  const livesRef = useRef<number>(3);
 
   // 掛け算・引き算レッスン関係の状態
   const [currentQuestion, setCurrentQuestion] = useState<Question | null>(null);
@@ -283,8 +288,6 @@ function App() {
         if (selectedLevel === 5) food = 'banana';
       }
     } else {
-      // 引き算モード時: multiplier は「引かれる数 (minuend)」として扱う
-      // レベルに応じて引かれる数の最大範囲を設定
       let maxMinuend = 5;
       if (selectedLevel === 2) maxMinuend = 5;
       else if (selectedLevel === 3) maxMinuend = 8;
@@ -294,7 +297,6 @@ function App() {
       const minMinuend = selectedLevel === 'random' ? 2 : (selectedLevel as number);
       multiplier = Math.floor(Math.random() * (maxMinuend - minMinuend + 1)) + minMinuend;
       
-      // 食べ物はランダム
       const randFood = Math.floor(Math.random() * 3);
       if (randFood === 0) food = 'carrot';
       else if (randFood === 1) food = 'apple';
@@ -310,7 +312,6 @@ function App() {
         const maxMultiplicand = multiplier === 5 ? 4 : 5;
         multiplicand = Math.floor(Math.random() * maxMultiplicand) + 1;
       } else {
-        // 引き算: 1 から multiplier-1 までのランダム (答えが0にならないように)
         multiplicand = Math.floor(Math.random() * (multiplier - 1)) + 1;
       }
 
@@ -332,12 +333,18 @@ function App() {
   const startGame = (selectedLevel: Level) => {
     setLevel(selectedLevel);
     setLives(3);
+    livesRef.current = 3;
     setWave(1);
     setTotalScore(0);
     setQuestionsAnswered(0);
     setLastQuestions([]);
+    
     setEnemies([]);
+    enemiesRef.current = [];
+    
     setProjectiles([]);
+    projectilesRef.current = [];
+    
     setPlacedPlates(0);
     setRemovedIndices([]);
     setShowFeedback(null);
@@ -384,119 +391,113 @@ function App() {
       });
     }
     setEnemies(newEnemies);
+    enemiesRef.current = newEnemies;
   };
 
-  // 6. メインゲームループ (リアルタイム進行)
+  // 6. メインゲームループ (リアルタイム進行 - Refバッチ同期設計)
   useEffect(() => {
     if (screen !== 'playing') return;
     if (showFeedback === 'correct') return;
 
     const interval = setInterval(() => {
+      let currentEnemies = [...enemiesRef.current];
+      let currentProjectiles = [...projectilesRef.current];
+      let currentLives = livesRef.current;
+      let reachedGoal = false;
+
       // 6-a. 敵の移動処理
-      setEnemies(prevEnemies => {
-        let reachedGoal = false;
-        const updated = prevEnemies.map(enemy => {
-          if (enemy.isSatiated) {
-            if (enemy.satiatedTimer > 0) {
-              return { ...enemy, satiatedTimer: enemy.satiatedTimer - 50 };
-            }
-            return null;
+      currentEnemies = currentEnemies.map(enemy => {
+        if (enemy.isSatiated) {
+          if (enemy.satiatedTimer > 0) {
+            return { ...enemy, satiatedTimer: enemy.satiatedTimer - 50 };
           }
-
-          const nextX = enemy.x - enemy.speed;
-          if (nextX <= 15) {
-            reachedGoal = true;
-            return null;
-          }
-          return { ...enemy, x: nextX };
-        }).filter((e): e is Enemy => e !== null);
-
-        if (reachedGoal) {
-          playSound('damage');
-          setLives(prev => {
-            const nextLives = prev - 1;
-            if (nextLives <= 0) {
-              setScreen('gameover');
-            }
-            return nextLives;
-          });
+          return null; // 表示時間切れで消滅
         }
-        return updated;
-      });
 
-      // 6-b. 弾の移動とLERP追尾・当たり判定
-      setProjectiles(prevProjectiles => {
-        const nextProjectiles: Projectile[] = [];
+        const nextX = enemy.x - enemy.speed;
+        if (nextX <= 15) {
+          reachedGoal = true;
+          return null; // テント侵入で消滅
+        }
+        return { ...enemy, x: nextX };
+      }).filter((e): e is Enemy => e !== null);
 
-        prevProjectiles.forEach(p => {
-          let target: Enemy | undefined;
-          setEnemies(currentEnemies => {
-            target = currentEnemies.find(e => e.id === p.targetEnemyId && !e.isSatiated);
-            return currentEnemies;
-          });
+      if (reachedGoal) {
+        playSound('damage');
+        currentLives = Math.max(0, currentLives - 1);
+        livesRef.current = currentLives;
+        setLives(currentLives);
+        if (currentLives <= 0) {
+          setScreen('gameover');
+        }
+      }
 
-          if (!target) {
-            setEnemies(currentEnemies => {
-              const alive = currentEnemies.filter(e => !e.isSatiated && e.x < 100);
-              if (alive.length > 0) {
-                target = alive.reduce((prev, curr) => prev.x < curr.x ? prev : curr);
+      // 6-b. 弾の移動 & LERP追尾・当たり判定 (Refバッチ同期内で処理)
+      const nextProjectiles: Projectile[] = [];
+
+      currentProjectiles.forEach(p => {
+        // ターゲットを探す (現在のバッチ同期リストから)
+        let target = currentEnemies.find(e => e.id === p.targetEnemyId && !e.isSatiated);
+
+        if (!target) {
+          const alive = currentEnemies.filter(e => !e.isSatiated && e.x < 100);
+          if (alive.length > 0) {
+            target = alive.reduce((prev, curr) => prev.x < curr.x ? prev : curr);
+          }
+        }
+
+        if (target) {
+          // LERPで弾を近づける (滑らかな吸い込み追尾)
+          const nextX = p.x + (target.x - p.x) * 0.15;
+          const nextY = p.y + (target.y - p.y) * 0.15;
+
+          const dx = Math.abs(target.x - p.x);
+          const dy = Math.abs(target.y - p.y);
+
+          // 当たり判定 (X軸3.5%, Y軸15px)
+          if (dx < 3.5 && dy < 15) {
+            playSound('hit');
+            const hitId = target.id;
+            
+            // 敵のHPを減らす (同期的)
+            currentEnemies = currentEnemies.map(e => {
+              if (e.id === hitId) {
+                const nextHp = e.hp - 1;
+                if (nextHp <= 0) {
+                  return { ...e, hp: 0, isSatiated: true, satiatedTimer: 1000 };
+                }
+                return { ...e, hp: nextHp };
               }
-              return currentEnemies;
+              return e;
+            });
+            // 弾は衝突したので消滅 (nextProjectiles に追加しない)
+          } else {
+            nextProjectiles.push({
+              ...p,
+              x: nextX,
+              y: nextY
             });
           }
-
-          if (target) {
-            const targetX = target.x;
-            const targetY = target.y;
-
-            // LERP追尾
-            const nextX = p.x + (targetX - p.x) * 0.15;
-            const nextY = p.y + (targetY - p.y) * 0.15;
-
-            const dx = Math.abs(targetX - p.x);
-            const dy = Math.abs(targetY - p.y);
-
-            // 当たり判定 (X軸3.5%, Y軸15px)
-            if (dx < 3.5 && dy < 15) {
-              playSound('hit');
-              const hitId = target.id;
-              
-              setEnemies(currEnemies => 
-                currEnemies.map(e => {
-                  if (e.id === hitId) {
-                    const nextHp = e.hp - 1;
-                    if (nextHp <= 0) {
-                      return { ...e, hp: 0, isSatiated: true, satiatedTimer: 1000 };
-                    }
-                    return { ...e, hp: nextHp };
-                  }
-                  return e;
-                })
-              );
-            } else {
-              nextProjectiles.push({
-                ...p,
-                x: nextX,
-                y: nextY
-              });
-            }
-          } else {
-            const nextX = p.x - p.speed;
-            if (nextX > 15) {
-              nextProjectiles.push({ ...p, x: nextX });
-            }
+        } else {
+          const nextX = p.x - p.speed;
+          if (nextX > 15) {
+            nextProjectiles.push({ ...p, x: nextX });
           }
-        });
-
-        return nextProjectiles;
+        }
       });
+
+      // 6-c. State と Ref のバッチ更新 (競合が発生しない)
+      enemiesRef.current = currentEnemies;
+      projectilesRef.current = nextProjectiles;
+      setEnemies(currentEnemies);
+      setProjectiles(nextProjectiles);
 
     }, 50);
 
     return () => clearInterval(interval);
   }, [screen, showFeedback]);
 
-  // 7. ウェーブクリアチェック
+  // 7. ウェーブクリアチェック (Refを参照)
   useEffect(() => {
     if (!waveActive || enemies.length > 0 || screen !== 'playing') return;
 
@@ -531,11 +532,9 @@ function App() {
     if (showFeedback) return;
     
     if (removedIndices.includes(index)) {
-      // 戻す (半透明を解除)
       setRemovedIndices(prev => prev.filter(i => i !== index));
       playSound('plate');
     } else {
-      // 消す (半透明にする)
       setRemovedIndices(prev => [...prev, index]);
       playSound('remove');
     }
@@ -545,10 +544,9 @@ function App() {
   const checkAnswer = () => {
     if (showFeedback || !currentQuestion) return;
 
-    // モードによって正解判定を切り替える
     const isCorrect = gameMode === 'multiplication'
       ? placedPlates === currentQuestion.multiplicand
-      : removedIndices.length === currentQuestion.multiplicand; // 引き算: 消した数が「引く数」と等しいこと
+      : removedIndices.length === currentQuestion.multiplicand;
 
     if (isCorrect) {
       playSound('correct');
@@ -558,7 +556,6 @@ function App() {
       triggerParticles();
       setTotalScore(prev => prev + 1);
 
-      // 正解した動物のタワーから、弾（食べ物）を連射！
       fireFoodProjectiles(currentQuestion);
 
       setTimeout(() => {
@@ -573,16 +570,15 @@ function App() {
       playSound('wrong');
       setShowFeedback('wrong');
 
-      // 1.8秒後に自動でフィードバックを消して再入力可能にする
+      // 1.8秒後に自動的に「やりなおし」状態に戻して再入力できるようにする
       setTimeout(() => {
         setShowFeedback(null);
       }, 1800);
     }
   };
 
-  // 10. 食べ物弾の連射発射
+  // 10. 食べ物弾の連射発射 (Ref同期配列に直接プッシュ)
   const fireFoodProjectiles = (q: Question) => {
-    // 発射数: 掛け算は積 (multiplier * multiplicand), 引き算は引いた数 (multiplicand = あげた数)
     const totalProjectiles = q.mode === 'multiplication'
       ? q.multiplier * q.multiplicand
       : q.multiplicand;
@@ -595,14 +591,13 @@ function App() {
     let firedCount = 0;
     const interval = setInterval(() => {
       let targetId = -1;
-      setEnemies(currEnemies => {
-        const alive = currEnemies.filter(e => !e.isSatiated && e.x < 100);
-        if (alive.length > 0) {
-          const primary = alive.reduce((prev, curr) => prev.x < curr.x ? prev : curr);
-          targetId = primary.id;
-        }
-        return currEnemies;
-      });
+      
+      // 生存オバケからターゲットを探す (Refを直接参照)
+      const alive = enemiesRef.current.filter(e => !e.isSatiated && e.x < 100);
+      if (alive.length > 0) {
+        const primary = alive.reduce((prev, curr) => prev.x < curr.x ? prev : curr);
+        targetId = primary.id;
+      }
 
       const newProj: Projectile = {
         id: Date.now() + firedCount,
@@ -613,7 +608,9 @@ function App() {
         speed: 1.5
       };
 
-      setProjectiles(prev => [...prev, newProj]);
+      // Ref と State を同時に同期更新
+      projectilesRef.current = [...projectilesRef.current, newProj];
+      setProjectiles(projectilesRef.current);
       playSound('shoot');
 
       firedCount++;
@@ -636,10 +633,9 @@ function App() {
     setCurrentQuestion(q);
   };
 
-  // モード選択後のレベル選択画面へ
   const selectMode = (mode: GameMode) => {
     setGameMode(mode);
-    setScreen('level_select');
+    setScreen('mode_select');
   };
 
   return (
@@ -703,7 +699,7 @@ function App() {
         </div>
       )}
 
-      {/* 1-b. 【新画面】モード選択画面 */}
+      {/* 1-b. モード選択画面 */}
       {screen === 'mode_select' && (
         <div className="mode-select-screen">
           <h2 className="level-title">どちらの モードで あそぶ？</h2>
@@ -899,7 +895,6 @@ function App() {
             <div className="speech-bubble">
               <div className="speech-text">
                 {gameMode === 'multiplication' ? (
-                  // 掛け算おねだり
                   <>
                     {ANIMALS[currentQuestion.animal].name}「
                     <span className="highlight">{FOODS[currentQuestion.food].name}</span> が 
@@ -907,7 +902,6 @@ function App() {
                     <span className="highlight">{currentQuestion.multiplicand}さら</span> ちょうだい！」
                   </>
                 ) : (
-                  // 引き算おねだり
                   <>
                     {ANIMALS[currentQuestion.animal].name}「
                     <span className="highlight">{FOODS[currentQuestion.food].name}</span> が 
@@ -921,10 +915,9 @@ function App() {
 
           {/* 式とテーブル */}
           <div className="workspace-section">
-            {/* 数式 (動的プレビュー) */}
+            {/* 数式 */}
             <div className={`formula-display ${showFeedback === 'correct' ? 'correct-highlight' : ''}`}>
               {gameMode === 'multiplication' ? (
-                // 掛け算
                 <>
                   <div className="num-box target">{currentQuestion.multiplier}</div>
                   <div>×</div>
@@ -939,8 +932,6 @@ function App() {
                   </div>
                 </>
               ) : (
-                // 引き算 (minuend - subtrahend = difference)
-                // プレビュー: 最初 {multiplier} - 消した数 {removedIndices.length} = 残り
                 <>
                   <div className="num-box target">{currentQuestion.multiplier}</div>
                   <div>－</div>
@@ -960,7 +951,6 @@ function App() {
             {/* お皿テーブル */}
             <div className={`table-area ${showFeedback === 'correct' ? 'correct-highlight' : ''}`}>
               {gameMode === 'multiplication' ? (
-                // 掛け算テーブル (お皿を並べる)
                 <>
                   {placedPlates === 0 && (
                     <div className="table-placeholder">
@@ -990,7 +980,6 @@ function App() {
                   ))}
                 </>
               ) : (
-                // 引き算テーブル (最初から果物が並んでいて、タップして消す)
                 <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '5px', width: '100%' }}>
                   {removedIndices.length === 0 && (
                     <div className="table-placeholder" style={{ marginBottom: '5px' }}>
@@ -1023,7 +1012,6 @@ function App() {
           <div className="control-section">
             <div className="interactive-shelf">
               {gameMode === 'multiplication' ? (
-                // かけざん用棚
                 <>
                   <div className="shelf-item-container">
                     <button 
@@ -1058,7 +1046,6 @@ function App() {
                   )}
                 </>
               ) : (
-                // ひきざん用棚
                 <div className="shelf-item-container">
                   <button 
                     className="btn-kids btn-kids-accent" 
