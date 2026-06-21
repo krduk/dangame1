@@ -635,7 +635,7 @@ function App() {
 
   const selectMode = (mode: GameMode) => {
     setGameMode(mode);
-    setScreen('mode_select');
+    setScreen('level_select');
   };
 
   return (
