@@ -56,12 +56,12 @@ body {
   border: var(--border-width) solid #e6d7c3;
   border-radius: 32px;
   box-shadow: var(--shadow-lg);
-  padding: 30px;
+  padding: 25px;
   position: relative;
   overflow: hidden;
   display: flex;
   flex-direction: column;
-  min-height: 640px;
+  min-height: 720px;
 }
 
 /* タイトル画面 */
@@ -174,6 +174,11 @@ body {
   color: white;
 }
 
+.btn-kids-accent {
+  background-color: var(--color-accent);
+  color: white;
+}
+
 /* レベル選択画面 */
 .level-select-screen {
   text-align: center;
@@ -264,8 +269,8 @@ body {
   justify-content: space-between;
   align-items: center;
   border-bottom: 3px dashed #e6d7c3;
-  padding-bottom: 15px;
-  margin-bottom: 20px;
+  padding-bottom: 10px;
+  margin-bottom: 15px;
 }
 
 .back-btn {
@@ -285,44 +290,231 @@ body {
   color: var(--color-accent);
 }
 
-.progress-container {
+.stats-container {
   display: flex;
-  gap: 8px;
+  align-items: center;
+  gap: 15px;
 }
 
-.progress-star {
-  font-size: 1.5rem;
+.lives-display {
+  display: flex;
+  gap: 4px;
+  font-size: 1.4rem;
+}
+
+.heart-icon {
+  color: var(--color-accent);
+  animation: heartbeat 1.2s infinite;
+}
+
+.heart-icon.empty {
   color: #d1d5db;
-  transition: transform 0.3s ease;
+  animation: none;
 }
 
-.progress-star.active {
-  color: var(--color-secondary);
-  animation: pop 0.4s ease-out;
+.score-badge {
+  background: #fffbeb;
+  border: 2px solid var(--color-secondary);
+  padding: 4px 12px;
+  border-radius: 12px;
+  font-weight: 800;
+  color: var(--color-text-dark);
 }
 
-/* メインゲームプレイエリア */
+/* ==========================================================================
+   タワーディフェンス (ピクニックロード) エリア
+   ========================================================================== */
+.picnic-road-area {
+  width: 100%;
+  height: 160px;
+  background-color: #a3cc5a; /* 明るい草原の緑 */
+  border: 4px solid #5a4b41;
+  border-radius: 20px;
+  position: relative;
+  overflow: hidden;
+  box-shadow: inset 0 6px 12px rgba(0,0,0,0.15), var(--shadow-sm);
+  margin-bottom: 15px;
+}
+
+/* グリッド風の道パターン */
+.road-path {
+  position: absolute;
+  top: 55px;
+  left: 0;
+  width: 100%;
+  height: 50px;
+  background-color: #e6c280; /* 土の道の砂色 */
+  border-top: 3px solid #cfa660;
+  border-bottom: 3px solid #cfa660;
+  background-image: repeating-linear-gradient(90deg, transparent, transparent 15px, rgba(0,0,0,0.04) 15px, rgba(0,0,0,0.04) 30px);
+}
+
+/* 左端のピクニックテント（防衛対象） */
+.picnic-tent {
+  position: absolute;
+  left: 10px;
+  top: 35px;
+  width: 70px;
+  height: 80px;
+  z-index: 5;
+  background-image: radial-gradient(circle, #ffccd5 40%, transparent 41%);
+  background-size: 16px 16px;
+  background-color: #fff;
+  border: 3px solid var(--color-text-dark);
+  border-radius: 8px 8px 0 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  box-shadow: var(--shadow-sm);
+}
+
+.picnic-tent::after {
+  content: '⛺';
+  font-size: 2.2rem;
+}
+
+.picnic-tent-label {
+  position: absolute;
+  bottom: -22px;
+  background: var(--color-text-dark);
+  color: white;
+  font-size: 0.75rem;
+  padding: 1px 6px;
+  border-radius: 8px;
+  white-space: nowrap;
+}
+
+/* 防衛用動物タワー */
+.tower-spot {
+  position: absolute;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  z-index: 4;
+}
+
+.tower-spot.rabbit-tower { left: 160px; top: 10px; }
+.tower-spot.bear-tower { left: 400px; top: 10px; }
+.tower-spot.monkey-tower { left: 640px; top: 10px; }
+
+.tower-avatar {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background: white;
+  border: 2px solid var(--color-text-dark);
+  object-fit: contain;
+  box-shadow: var(--shadow-sm);
+  transition: transform 0.1s ease;
+}
+
+.tower-avatar.attacking {
+  animation: attack-bounce 0.4s ease-out;
+}
+
+.tower-label {
+  font-size: 0.75rem;
+  font-weight: 800;
+  background: rgba(255,255,255,0.9);
+  border: 1px solid var(--color-text-dark);
+  padding: 0px 4px;
+  border-radius: 6px;
+  margin-top: 2px;
+  white-space: nowrap;
+}
+
+/* いたずらオバケ（敵） */
+.ghost-enemy {
+  position: absolute;
+  width: 50px;
+  height: 50px;
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  transition: left 0.05s linear;
+  animation: float 2s ease-in-out infinite;
+}
+
+.ghost-body {
+  font-size: 2.2rem;
+  line-height: 1;
+  position: relative;
+  user-select: none;
+}
+
+.ghost-hp-bar-container {
+  width: 40px;
+  height: 6px;
+  background-color: #e5e7eb;
+  border: 1px solid var(--color-text-dark);
+  border-radius: 3px;
+  overflow: hidden;
+  margin-bottom: 2px;
+  position: absolute;
+  top: -10px;
+}
+
+.ghost-hp-bar {
+  height: 100%;
+  background-color: var(--color-success);
+  transition: width 0.15s ease-out;
+}
+
+.ghost-hp-bar.hungry {
+  background-color: var(--color-accent);
+}
+
+.ghost-satiated-label {
+  position: absolute;
+  background: var(--color-secondary);
+  color: var(--color-text-dark);
+  font-size: 0.7rem;
+  font-weight: 800;
+  padding: 1px 4px;
+  border-radius: 4px;
+  top: -24px;
+  border: 1px solid var(--color-text-dark);
+  animation: pop 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+/* 食べ物弾（弾丸プロジェクトファイル） */
+.food-projectile {
+  position: absolute;
+  width: 24px;
+  height: 24px;
+  z-index: 15;
+  object-fit: contain;
+  transition: left 0.05s linear, top 0.05s linear;
+  filter: drop-shadow(0 2px 4px rgba(0,0,0,0.15));
+}
+
+/* ==========================================================================
+   ゲームプレイ画面 下半部
+   ========================================================================== */
 .game-play-area {
   display: flex;
   flex-direction: column;
   flex-grow: 1;
-  gap: 20px;
+  gap: 15px;
 }
 
-/* 上部：動物と吹き出し */
+/* 動物の吹き出し・おねだりセクション */
 .character-section {
   display: flex;
   align-items: center;
-  gap: 20px;
+  gap: 15px;
   background: #fbf7f0;
-  padding: 15px 20px;
-  border-radius: 24px;
+  padding: 12px 18px;
+  border-radius: 20px;
   border: 3px solid #f0e2d0;
 }
 
 .character-display {
-  width: 140px;
-  height: 140px;
+  width: 90px;
+  height: 90px;
   position: relative;
   flex-shrink: 0;
   display: flex;
@@ -334,6 +526,9 @@ body {
   width: 100%;
   height: 100%;
   object-fit: contain;
+  border-radius: 50%;
+  border: 2px solid var(--color-text-dark);
+  background: white;
   transition: transform 0.2s;
 }
 
@@ -347,9 +542,9 @@ body {
 
 .speech-bubble {
   background: #fff;
-  border: 4px solid var(--color-text-dark);
-  border-radius: 20px;
-  padding: 15px 20px;
+  border: 3px solid var(--color-text-dark);
+  border-radius: 16px;
+  padding: 10px 16px;
   position: relative;
   flex-grow: 1;
   box-shadow: var(--shadow-sm);
@@ -358,7 +553,7 @@ body {
 .speech-bubble::before, .speech-bubble::after {
   content: '';
   position: absolute;
-  left: -20px;
+  left: -16px;
   top: 50%;
   transform: translateY(-50%);
   border-style: solid;
@@ -368,51 +563,51 @@ body {
 
 .speech-bubble::before {
   border-color: transparent var(--color-text-dark) transparent transparent;
-  border-width: 12px 20px 12px 0;
+  border-width: 10px 16px 10px 0;
   z-index: 1;
 }
 
 .speech-bubble::after {
   border-color: transparent #fff transparent transparent;
-  border-width: 9px 16px 9px 0;
-  left: -15px;
+  border-width: 7px 13px 7px 0;
+  left: -13px;
   z-index: 2;
 }
 
 .speech-text {
-  font-size: 1.3rem;
+  font-size: 1.2rem;
   font-weight: 700;
-  line-height: 1.6;
+  line-height: 1.5;
   color: var(--color-text-dark);
 }
 
 .speech-text span.highlight {
   color: var(--color-accent);
-  font-size: 1.6rem;
-  padding: 0 4px;
+  font-size: 1.45rem;
+  padding: 0 2px;
   text-decoration: underline;
 }
 
-/* 中部：式とテーブル */
+/* 式とワークスペース */
 .workspace-section {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 15px;
+  gap: 12px;
   flex-grow: 1;
 }
 
 .formula-display {
   display: flex;
   align-items: center;
-  gap: 12px;
-  font-size: 2.2rem;
+  gap: 10px;
+  font-size: 2rem;
   font-weight: 800;
   color: var(--color-text-dark);
   background: #fffbeb;
   border: 3px dashed var(--color-secondary);
-  padding: 10px 24px;
-  border-radius: 20px;
+  padding: 8px 20px;
+  border-radius: 16px;
   box-shadow: var(--shadow-sm);
 }
 
@@ -420,9 +615,9 @@ body {
   display: inline-flex;
   justify-content: center;
   align-items: center;
-  min-width: 48px;
-  height: 48px;
-  border-radius: 12px;
+  min-width: 44px;
+  height: 44px;
+  border-radius: 10px;
   background: #fff;
   border: 2px solid var(--color-text-dark);
   box-shadow: 0 4px 0 var(--color-text-dark);
@@ -438,39 +633,39 @@ body {
   color: var(--color-success);
 }
 
-/* お皿を並べるテーブル */
+/* お皿を置く木のテーブル */
 .table-area {
   width: 100%;
-  min-height: 180px;
-  background: #d4a373; /* 木のテーブル風カラー */
-  border: 6px solid #a67c52;
-  border-radius: 24px;
-  box-shadow: inset 0 8px 16px rgba(0, 0, 0, 0.2), var(--shadow-md);
-  padding: 20px;
+  min-height: 150px;
+  background: #d4a373; /* 木のテーブル */
+  border: 5px solid #a67c52;
+  border-radius: 20px;
+  box-shadow: inset 0 6px 12px rgba(0, 0, 0, 0.2), var(--shadow-md);
+  padding: 15px;
   display: flex;
   flex-wrap: wrap;
-  gap: 20px;
+  gap: 15px;
   justify-content: center;
   align-items: center;
   position: relative;
 }
 
 .table-placeholder {
-  color: rgba(255, 255, 255, 0.8);
-  font-size: 1.25rem;
+  color: rgba(255, 255, 255, 0.85);
+  font-size: 1.15rem;
   font-weight: 700;
   text-align: center;
   pointer-events: none;
 }
 
-/* お皿と食べ物 */
+/* お皿と果物 (はみ出し修正) */
 .plate-item {
-  width: 120px;
-  height: 120px;
+  width: 110px;
+  height: 110px;
   background: #fff;
   border: 3px solid #e0e0e0;
   border-radius: 50%;
-  box-shadow: 0 6px 0px rgba(0, 0, 0, 0.15), var(--shadow-sm);
+  box-shadow: 0 5px 0px rgba(0, 0, 0, 0.15), var(--shadow-sm);
   display: flex;
   justify-content: center;
   align-items: center;
@@ -487,12 +682,12 @@ body {
   position: absolute;
   top: -8px;
   left: -8px;
-  width: 28px;
-  height: 28px;
+  width: 26px;
+  height: 26px;
   border-radius: 50%;
   background-color: var(--color-info);
   color: white;
-  font-size: 0.9rem;
+  font-size: 0.85rem;
   font-weight: 700;
   display: flex;
   justify-content: center;
@@ -501,53 +696,41 @@ body {
   box-shadow: var(--shadow-sm);
 }
 
+/* 果物がお皿からはみ出さないための Flex レイアウト */
 .plate-food-grid {
-  width: 75%;
-  height: 75%;
-  display: grid;
-  place-items: center;
+  width: 80px;
+  height: 80px;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: center;
   gap: 4px;
+  padding: 5px;
 }
-
-.plate-food-grid.grid-1 { grid-template-columns: 1fr; }
-.plate-food-grid.grid-2 { grid-template-columns: repeat(2, 1fr); }
-.plate-food-grid.grid-3 { grid-template-columns: repeat(3, 1fr); }
-.plate-food-grid.grid-4 { grid-template-columns: repeat(2, 1fr); grid-template-rows: repeat(2, 1fr); }
-.plate-food-grid.grid-5 {
-  grid-template-areas: 
-    "f1 f2"
-    "f3 f3"
-    "f4 f5";
-}
-.plate-food-grid.grid-5 img:nth-child(1) { grid-area: f1; }
-.plate-food-grid.grid-5 img:nth-child(2) { grid-area: f2; }
-.plate-food-grid.grid-5 img:nth-child(3) { grid-area: f3; justify-self: center; }
-.plate-food-grid.grid-5 img:nth-child(4) { grid-area: f4; }
-.plate-food-grid.grid-5 img:nth-child(5) { grid-area: f5; }
 
 .food-icon-small {
-  width: 32px;
-  height: 32px;
+  width: 22px;
+  height: 22px;
   object-fit: contain;
   animation: pop 0.3s ease-out;
 }
 
-/* 下部：操作パネル */
+/* 操作パネル・棚 */
 .control-section {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 15px;
+  gap: 12px;
 }
 
 .interactive-shelf {
   display: flex;
-  gap: 20px;
+  gap: 15px;
   align-items: center;
   justify-content: center;
   background: #f0e6d6;
-  border-radius: 20px;
-  padding: 15px 25px;
+  border-radius: 16px;
+  padding: 10px 20px;
   border: 3px solid #d4c5af;
   width: 100%;
 }
@@ -556,17 +739,17 @@ body {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
 }
 
 .btn-shelf-plate {
-  width: 110px;
-  height: 110px;
+  width: 90px;
+  height: 90px;
   background: #fff;
   border: 3px solid var(--color-text-dark);
   border-radius: 50%;
   cursor: pointer;
-  box-shadow: 0 6px 0 var(--color-text-dark);
+  box-shadow: 0 5px 0 var(--color-text-dark);
   display: flex;
   justify-content: center;
   align-items: center;
@@ -586,19 +769,19 @@ body {
   right: 0px;
   background-color: var(--color-success);
   color: white;
-  width: 28px;
-  height: 28px;
+  width: 26px;
+  height: 26px;
   border-radius: 50%;
   border: 2px solid var(--color-text-dark);
   display: flex;
   justify-content: center;
   align-items: center;
-  font-size: 1.1rem;
+  font-size: 1rem;
   font-weight: 800;
 }
 
 .shelf-label {
-  font-size: 1.1rem;
+  font-size: 1rem;
   font-weight: 700;
   color: var(--color-text-dark);
 }
@@ -608,23 +791,23 @@ body {
   gap: 15px;
 }
 
-/* 音声オンオフ */
+/* 音声トングル */
 .sound-toggle {
   position: absolute;
-  top: 20px;
-  right: 20px;
+  top: 15px;
+  right: 15px;
   background: #fff;
   border: 3px solid var(--color-text-dark);
   border-radius: 50%;
-  width: 44px;
-  height: 44px;
+  width: 40px;
+  height: 40px;
   display: flex;
   justify-content: center;
   align-items: center;
-  font-size: 1.25rem;
+  font-size: 1.1rem;
   cursor: pointer;
   box-shadow: 0 4px 0 var(--color-text-dark);
-  z-index: 10;
+  z-index: 100;
 }
 
 .sound-toggle:active {
@@ -646,10 +829,10 @@ body {
 }
 
 .feedback-stamp {
-  font-size: 8rem;
+  font-size: 7rem;
   line-height: 1;
   animation: stamp-pop 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-  margin-bottom: 20px;
+  margin-bottom: 15px;
 }
 
 .feedback-stamp.correct {
@@ -661,14 +844,15 @@ body {
 }
 
 .feedback-text {
-  font-size: 2.2rem;
+  font-size: 1.8rem;
   font-weight: 800;
   color: var(--color-text-dark);
-  margin-bottom: 30px;
+  margin-bottom: 25px;
   text-align: center;
+  line-height: 1.5;
 }
 
-/* クリア画面 */
+/* クリア / ゲームオーバー画面 */
 .clear-screen {
   text-align: center;
   display: flex;
@@ -688,22 +872,22 @@ body {
 }
 
 .clear-subtitle {
-  font-size: 1.6rem;
+  font-size: 1.5rem;
   color: var(--color-text);
-  margin-bottom: 30px;
+  margin-bottom: 25px;
 }
 
 .clear-mascot-dance {
   display: flex;
-  gap: 30px;
+  gap: 20px;
   justify-content: center;
   align-items: center;
-  margin-bottom: 40px;
+  margin-bottom: 30px;
 }
 
 .clear-mascot-dance .mascot-img-wrapper {
-  width: 120px;
-  height: 120px;
+  width: 110px;
+  height: 110px;
 }
 
 .clear-mascot-dance .mascot-img-wrapper:nth-child(1) {
@@ -717,30 +901,58 @@ body {
 }
 
 .clear-stats {
-  font-size: 1.5rem;
+  font-size: 1.4rem;
   font-weight: 700;
   color: var(--color-text-dark);
-  margin-bottom: 30px;
+  margin-bottom: 25px;
   background: #fffbeb;
-  padding: 15px 30px;
+  padding: 15px 25px;
   border-radius: 20px;
   border: 3px dashed var(--color-secondary);
 }
 
 .clear-star-reward {
-  font-size: 3rem;
+  font-size: 2.5rem;
   color: var(--color-secondary);
   display: flex;
   justify-content: center;
-  gap: 10px;
-  margin-top: 10px;
+  gap: 8px;
+  margin-top: 8px;
   animation: bounce 1s ease-in-out infinite;
+}
+
+/* 星パーティクル */
+.star-particle {
+  position: absolute;
+  pointer-events: none;
+  font-size: 1.5rem;
+  color: #ffb703;
+  animation: particle-fly 1.2s ease-out forwards;
+  z-index: 200;
 }
 
 /* アニメーション定義 */
 @keyframes float {
   0%, 100% { transform: translateY(0); }
-  50% { transform: translateY(-10px); }
+  50% { transform: translateY(-8px); }
+}
+
+@keyframes heartbeat {
+  0%, 100% { transform: scale(1); }
+  25% { transform: scale(1.15); }
+  40% { transform: scale(1); }
+  55% { transform: scale(1.1); }
+}
+
+@keyframes particle-fly {
+  0% {
+    transform: translate(0, 0) scale(1) rotate(0deg);
+    opacity: 1;
+  }
+  100% {
+    transform: translate(var(--tx), var(--ty)) scale(0) rotate(360deg);
+    opacity: 0;
+  }
 }
 
 @keyframes pop {
@@ -758,17 +970,17 @@ body {
 
 @keyframes eat-bounce {
   0%, 100% { transform: scale(1) translateY(0); }
-  50% { transform: scale(1.05, 0.95) translateY(-5px); }
+  50% { transform: scale(1.05, 0.95) translateY(-4px); }
 }
 
 @keyframes dance {
   0% { transform: translateY(0) rotate(-5deg); }
-  100% { transform: translateY(-8px) rotate(5deg); }
+  100% { transform: translateY(-6px) rotate(5deg); }
 }
 
 @keyframes bounce {
   0%, 100% { transform: translateY(0); }
-  50% { transform: translateY(-10px); }
+  50% { transform: translateY(-8px); }
 }
 
 @keyframes fadeIn {
@@ -776,10 +988,15 @@ body {
   to { opacity: 1; }
 }
 
-/* アシスト機能・フッター */
+@keyframes attack-bounce {
+  0%, 100% { transform: scale(1) translateY(0); }
+  30% { transform: scale(1.2, 0.8) translateY(-4px); }
+  60% { transform: scale(0.9, 1.1) translateY(2px); }
+}
+
 .footer-text {
   text-align: center;
-  margin-top: 20px;
-  font-size: 0.9rem;
+  margin-top: 15px;
+  font-size: 0.85rem;
   color: #9c8e85;
 }
