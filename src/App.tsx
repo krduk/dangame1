@@ -23,10 +23,12 @@ const GHOST_TYPES = {
 };
 
 type Level = 2 | 3 | 5 | 'random';
+type GameMode = 'multiplication' | 'subtraction';
 
 interface Question {
-  multiplier: number;   // 1皿あたりの個数
-  multiplicand: number; // 皿の数
+  mode: GameMode;
+  multiplier: number;   // 掛け算: 1皿あたりの個数 / 引き算: 引かれる数 (最初の数)
+  multiplicand: number; // 掛け算: 皿の数 / 引き算: 引く数 (あげる数)
   food: keyof typeof FOODS;
   animal: keyof typeof ANIMALS;
 }
@@ -40,14 +42,14 @@ interface Enemy {
   type: keyof typeof GHOST_TYPES;
   emoji: string;
   speed: number;
-  isSatiated: boolean; // 満腹になって満足して帰る状態か
-  satiatedTimer: number; // 「ごちそうさま」表示用
+  isSatiated: boolean;
+  satiatedTimer: number;
 }
 
 interface Projectile {
   id: number;
-  x: number; // 現在位置 X %
-  y: number; // 現在位置 Y px
+  x: number;
+  y: number;
   targetEnemyId: number;
   food: keyof typeof FOODS;
   speed: number;
@@ -64,8 +66,9 @@ interface Particle {
 }
 
 function App() {
-  // 画面遷移
-  const [screen, setScreen] = useState<'title' | 'level_select' | 'playing' | 'clear' | 'gameover'>('title');
+  // 画面遷移 & モード設定
+  const [screen, setScreen] = useState<'title' | 'mode_select' | 'level_select' | 'playing' | 'clear' | 'gameover'>('title');
+  const [gameMode, setGameMode] = useState<GameMode>('multiplication');
   const [level, setLevel] = useState<Level>(2);
   
   // タワーディフェンス関係の状態
@@ -76,22 +79,27 @@ function App() {
   const [waveActive, setWaveActive] = useState<boolean>(false);
   const [attackingTower, setAttackingTower] = useState<keyof typeof ANIMALS | null>(null);
 
-  // 掛け算レッスン関係の状態
+  // 掛け算・引き算レッスン関係の状態
   const [currentQuestion, setCurrentQuestion] = useState<Question | null>(null);
-  const [lastQuestions, setLastQuestions] = useState<string[]>([]); // 重複防止用履歴
+  const [lastQuestions, setLastQuestions] = useState<string[]>([]); // 重複防止履歴
+  
+  // かけざん用
   const [placedPlates, setPlacedPlates] = useState<number>(0);
+  // ひきざん用 (消した果物のインデックス)
+  const [removedIndices, setRemovedIndices] = useState<number[]>([]);
+
   const [showFeedback, setShowFeedback] = useState<'correct' | 'wrong' | null>(null);
   const [isEating, setIsEating] = useState<boolean>(false);
   const [isHappy, setIsHappy] = useState<boolean>(false);
   const [totalScore, setTotalScore] = useState<number>(0);
-  const [questionsAnswered, setQuestionsAnswered] = useState<number>(0); // 今回のゲームで解いた問題数
+  const [questionsAnswered, setQuestionsAnswered] = useState<number>(0);
   
   // オーディオとエフェクト
   const [audioEnabled, setAudioEnabled] = useState<boolean>(true);
   const [particles, setParticles] = useState<Particle[]>([]);
   const audioCtxRef = useRef<AudioContext | null>(null);
 
-  // 1. 効果音ジェネレーター (Web Audio API)
+  // 1. 効果音ジェネレーター
   const playSound = (type: 'plate' | 'correct' | 'wrong' | 'clear' | 'remove' | 'shoot' | 'hit' | 'damage') => {
     if (!audioEnabled) return;
     try {
@@ -105,7 +113,7 @@ function App() {
       const now = ctx.currentTime;
 
       if (type === 'plate') {
-        // お皿をポンと置いた音
+        // お皿を置いた/果物を戻した音
         const osc = ctx.createOscillator();
         const gain = ctx.createGain();
         osc.type = 'sine';
@@ -118,7 +126,7 @@ function App() {
         osc.start(now);
         osc.stop(now + 0.12);
       } else if (type === 'remove') {
-        // お皿を片付けた音
+        // お皿を消した/果物を消した音
         const osc = ctx.createOscillator();
         const gain = ctx.createGain();
         osc.type = 'triangle';
@@ -131,7 +139,7 @@ function App() {
         osc.start(now);
         osc.stop(now + 0.1);
       } else if (type === 'shoot') {
-        // 食べ物を発射した音 (ピョン！)
+        // 弾丸発射音
         const osc = ctx.createOscillator();
         const gain = ctx.createGain();
         osc.type = 'sine';
@@ -144,7 +152,7 @@ function App() {
         osc.start(now);
         osc.stop(now + 0.1);
       } else if (type === 'hit') {
-        // 敵に食べ物が当たった音 (ポフッ)
+        // 弾命中音
         const osc = ctx.createOscillator();
         const gain = ctx.createGain();
         osc.type = 'triangle';
@@ -157,7 +165,7 @@ function App() {
         osc.start(now);
         osc.stop(now + 0.06);
       } else if (type === 'damage') {
-        // テントに敵が侵入した時のダメージ音 (ドスン！)
+        // テント被弾音
         const osc = ctx.createOscillator();
         const gain = ctx.createGain();
         osc.type = 'sawtooth';
@@ -170,7 +178,7 @@ function App() {
         osc.start(now);
         osc.stop(now + 0.3);
       } else if (type === 'correct') {
-        // 正解音: ピピピピーン！ (C5 -> E5 -> G5 -> C6)
+        // 正解ファンファーレ
         const notes = [523.25, 659.25, 783.99, 1046.50];
         notes.forEach((freq, idx) => {
           const osc = ctx.createOscillator();
@@ -185,7 +193,7 @@ function App() {
           osc.stop(now + idx * 0.08 + 0.2);
         });
       } else if (type === 'wrong') {
-        // 不正解音: ブブー
+        // 不正解音
         const osc1 = ctx.createOscillator();
         const osc2 = ctx.createOscillator();
         const gain = ctx.createGain();
@@ -203,12 +211,12 @@ function App() {
         osc1.stop(now + 0.4);
         osc2.stop(now + 0.4);
       } else if (type === 'clear') {
-        // ファンファーレ！
+        // ステージクリアファンファーレ
         const chords = [
-          [261.63, 329.63, 392.00], // C4, E4, G4
-          [349.23, 440.00, 523.25], // F4, A4, C5
-          [392.00, 493.88, 587.33], // G4, B4, D5
-          [523.25, 659.25, 783.99, 1046.50] // C5, E5, G5, C6
+          [261.63, 329.63, 392.00], // C4
+          [349.23, 440.00, 523.25], // F4
+          [392.00, 493.88, 587.33], // G4
+          [523.25, 659.25, 783.99, 1046.50] // C5
         ];
         chords.forEach((chord, chordIdx) => {
           chord.forEach((freq) => {
@@ -255,34 +263,59 @@ function App() {
     }, 1500);
   };
 
-  // 3. 掛け算問題生成 (重複防止ロジック付き)
+  // 3. 掛け算・引き算問題生成
   const generateQuestion = (selectedLevel: Level): Question => {
     const animalsList: (keyof typeof ANIMALS)[] = ['rabbit', 'bear', 'monkey'];
     let multiplier = 2;
     let food: keyof typeof FOODS = 'carrot';
 
-    if (selectedLevel === 'random') {
-      const rand = Math.floor(Math.random() * 3);
-      if (rand === 0) { multiplier = 2; food = 'carrot'; }
-      else if (rand === 1) { multiplier = 3; food = 'apple'; }
-      else { multiplier = 5; food = 'banana'; }
+    // 3-a. 食べ物と基本数の決定
+    if (gameMode === 'multiplication') {
+      if (selectedLevel === 'random') {
+        const rand = Math.floor(Math.random() * 3);
+        if (rand === 0) { multiplier = 2; food = 'carrot'; }
+        else if (rand === 1) { multiplier = 3; food = 'apple'; }
+        else { multiplier = 5; food = 'banana'; }
+      } else {
+        multiplier = selectedLevel;
+        if (selectedLevel === 2) food = 'carrot';
+        if (selectedLevel === 3) food = 'apple';
+        if (selectedLevel === 5) food = 'banana';
+      }
     } else {
-      multiplier = selectedLevel;
-      if (selectedLevel === 2) food = 'carrot';
-      if (selectedLevel === 3) food = 'apple';
-      if (selectedLevel === 5) food = 'banana';
+      // 引き算モード時: multiplier は「引かれる数 (minuend)」として扱う
+      // レベルに応じて引かれる数の最大範囲を設定
+      let maxMinuend = 5;
+      if (selectedLevel === 2) maxMinuend = 5;
+      else if (selectedLevel === 3) maxMinuend = 8;
+      else if (selectedLevel === 5) maxMinuend = 10;
+      else maxMinuend = 10;
+
+      const minMinuend = selectedLevel === 'random' ? 2 : (selectedLevel as number);
+      multiplier = Math.floor(Math.random() * (maxMinuend - minMinuend + 1)) + minMinuend;
+      
+      // 食べ物はランダム
+      const randFood = Math.floor(Math.random() * 3);
+      if (randFood === 0) food = 'carrot';
+      else if (randFood === 1) food = 'apple';
+      else food = 'banana';
     }
 
-    // 重複のない「掛ける数 (1〜5、5の段なら1〜4)」を探す
-    const maxMultiplicand = multiplier === 5 ? 4 : 5;
+    // 3-b. 掛ける数 (皿の数) または 引く数 (あげる数) の決定
     let multiplicand = 1;
     let attempts = 0;
     
     while (attempts < 15) {
-      multiplicand = Math.floor(Math.random() * maxMultiplicand) + 1;
-      const questionKey = `${multiplier}*${multiplicand}`;
+      if (gameMode === 'multiplication') {
+        const maxMultiplicand = multiplier === 5 ? 4 : 5;
+        multiplicand = Math.floor(Math.random() * maxMultiplicand) + 1;
+      } else {
+        // 引き算: 1 から multiplier-1 までのランダム (答えが0にならないように)
+        multiplicand = Math.floor(Math.random() * (multiplier - 1)) + 1;
+      }
+
+      const questionKey = `${gameMode}-${multiplier}*${multiplicand}`;
       if (!lastQuestions.includes(questionKey)) {
-        // 重複なし。履歴に追加（直近3問を記憶）
         const newHistory = [...lastQuestions, questionKey];
         if (newHistory.length > 3) newHistory.shift();
         setLastQuestions(newHistory);
@@ -292,7 +325,7 @@ function App() {
     }
 
     const animal = animalsList[Math.floor(Math.random() * animalsList.length)];
-    return { multiplier, multiplicand, food, animal };
+    return { mode: gameMode, multiplier, multiplicand, food, animal };
   };
 
   // 4. ゲームの開始
@@ -306,16 +339,14 @@ function App() {
     setEnemies([]);
     setProjectiles([]);
     setPlacedPlates(0);
+    setRemovedIndices([]);
     setShowFeedback(null);
     setIsEating(false);
     setIsHappy(false);
     setScreen('playing');
 
-    // 最初のウェーブの敵を出す
     spawnWaveEnemies(1);
 
-    // 最初の問題をセット
-    // ※ generateQuestionに一時的な空履歴を渡す代わりに引数はlevelのみ
     const q = generateQuestion(selectedLevel);
     setCurrentQuestion(q);
   };
@@ -330,11 +361,9 @@ function App() {
         ? ['normal', 'fast'] 
         : ['normal', 'fast', 'fat'];
 
-    // ウェーブごとの敵の数 (3, 5, 7)
     const enemyCount = waveNum * 2 + 1;
 
     for (let i = 0; i < enemyCount; i++) {
-      // くいしんぼうオニ(ボス)はウェーブ3の最後に1体だけ出す
       const type = (waveNum === 3 && i === enemyCount - 1) 
         ? 'fat' 
         : types[Math.floor(Math.random() * types.length)];
@@ -343,8 +372,8 @@ function App() {
 
       newEnemies.push({
         id: Date.now() + i,
-        x: 100 + i * 20, // 右端の外側から順次登場させる
-        y: 65 + (i % 2) * 12, // 道の上下に少し散らす
+        x: 100 + i * 20,
+        y: 65 + (i % 2) * 12,
         hp: config.maxHp,
         maxHp: config.maxHp,
         type,
@@ -357,11 +386,9 @@ function App() {
     setEnemies(newEnemies);
   };
 
-  // 6. メインゲームループ (オバケの進行と弾の移動・当たり判定)
+  // 6. メインゲームループ (リアルタイム進行)
   useEffect(() => {
     if (screen !== 'playing') return;
-    
-    // 正解アニメーション表示中（ポーズ中）は敵や弾の動作を止める
     if (showFeedback === 'correct') return;
 
     const interval = setInterval(() => {
@@ -370,16 +397,15 @@ function App() {
         let reachedGoal = false;
         const updated = prevEnemies.map(enemy => {
           if (enemy.isSatiated) {
-            // 満腹マーク表示時間を進める
             if (enemy.satiatedTimer > 0) {
               return { ...enemy, satiatedTimer: enemy.satiatedTimer - 50 };
             }
-            return null; // 表示時間が切れたら削除
+            return null;
           }
 
           const nextX = enemy.x - enemy.speed;
           if (nextX <= 15) {
-            reachedGoal = true; // 左端のテントに到達
+            reachedGoal = true;
             return null;
           }
           return { ...enemy, x: nextX };
@@ -398,24 +424,21 @@ function App() {
         return updated;
       });
 
-      // 6-b. 弾の移動と当たり判定
+      // 6-b. 弾の移動とLERP追尾・当たり判定
       setProjectiles(prevProjectiles => {
         const nextProjectiles: Projectile[] = [];
 
         prevProjectiles.forEach(p => {
-          // ターゲットの敵を探す
           let target: Enemy | undefined;
           setEnemies(currentEnemies => {
             target = currentEnemies.find(e => e.id === p.targetEnemyId && !e.isSatiated);
             return currentEnemies;
           });
 
-          // ターゲットが既にいない場合、一番左の生存している敵を再追尾
           if (!target) {
             setEnemies(currentEnemies => {
               const alive = currentEnemies.filter(e => !e.isSatiated && e.x < 100);
               if (alive.length > 0) {
-                // 最も進んでいる（x座標が小さい）敵
                 target = alive.reduce((prev, curr) => prev.x < curr.x ? prev : curr);
               }
               return currentEnemies;
@@ -423,24 +446,21 @@ function App() {
           }
 
           if (target) {
-            // ターゲットに向かって弾を進める (x: %, y: px)
             const targetX = target.x;
             const targetY = target.y;
 
-            // LERP追尾 (横X%, 縦Ypx)
+            // LERP追尾
             const nextX = p.x + (targetX - p.x) * 0.15;
             const nextY = p.y + (targetY - p.y) * 0.15;
 
-            const dx = Math.abs(targetX - p.x); // Xの差 (%)
-            const dy = Math.abs(targetY - p.y); // Yの差 (px)
+            const dx = Math.abs(targetX - p.x);
+            const dy = Math.abs(targetY - p.y);
 
-            // 当たり判定 (X軸差が3.5%未満、かつY軸差が15px未満)
+            // 当たり判定 (X軸3.5%, Y軸15px)
             if (dx < 3.5 && dy < 15) {
-              // 衝突した！
               playSound('hit');
               const hitId = target.id;
               
-              // 敵にダメージ（満腹度追加）
               setEnemies(currEnemies => 
                 currEnemies.map(e => {
                   if (e.id === hitId) {
@@ -453,9 +473,7 @@ function App() {
                   return e;
                 })
               );
-              // この弾は消滅するので nextProjectiles に追加しない
             } else {
-              // ターゲットに向かって移動
               nextProjectiles.push({
                 ...p,
                 x: nextX,
@@ -463,7 +481,6 @@ function App() {
               });
             }
           } else {
-            // 画面外にそのまま直進
             const nextX = p.x - p.speed;
             if (nextX > 15) {
               nextProjectiles.push({ ...p, x: nextX });
@@ -479,29 +496,25 @@ function App() {
     return () => clearInterval(interval);
   }, [screen, showFeedback]);
 
-  // 7. ウェーブクリア・敵全滅チェック
+  // 7. ウェーブクリアチェック
   useEffect(() => {
     if (!waveActive || enemies.length > 0 || screen !== 'playing') return;
 
-    // 生存している敵が全て満腹退散した場合
     setWaveActive(false);
     if (wave < 3) {
-      // 次のウェーブへ進む
       setWave(prev => prev + 1);
       spawnWaveEnemies(wave + 1);
       playSound('clear');
     } else {
-      // 全ウェーブクリア！ゲーム勝利
       playSound('clear');
       setScreen('clear');
     }
   }, [enemies, waveActive, wave, screen]);
 
-  // 8. お皿の追加と削除
+  // 8. かけざん用：お皿の追加と削除
   const addPlate = () => {
     if (showFeedback) return;
-    if (placedPlates >= 6) return; // 最大6皿制限
-
+    if (placedPlates >= 6) return;
     setPlacedPlates(prev => prev + 1);
     playSound('plate');
   };
@@ -509,16 +522,33 @@ function App() {
   const removePlate = () => {
     if (showFeedback) return;
     if (placedPlates <= 0) return;
-
     setPlacedPlates(prev => prev - 1);
     playSound('remove');
   };
 
-  // 9. 答え合わせ ＆ 攻撃開始
+  // 8-b. ひきざん用：果物のタップ消去トグル
+  const toggleRemoveItem = (index: number) => {
+    if (showFeedback) return;
+    
+    if (removedIndices.includes(index)) {
+      // 戻す (半透明を解除)
+      setRemovedIndices(prev => prev.filter(i => i !== index));
+      playSound('plate');
+    } else {
+      // 消す (半透明にする)
+      setRemovedIndices(prev => [...prev, index]);
+      playSound('remove');
+    }
+  };
+
+  // 9. 答え合わせ & 攻撃トリガー
   const checkAnswer = () => {
     if (showFeedback || !currentQuestion) return;
 
-    const isCorrect = placedPlates === currentQuestion.multiplicand;
+    // モードによって正解判定を切り替える
+    const isCorrect = gameMode === 'multiplication'
+      ? placedPlates === currentQuestion.multiplicand
+      : removedIndices.length === currentQuestion.multiplicand; // 引き算: 消した数が「引く数」と等しいこと
 
     if (isCorrect) {
       playSound('correct');
@@ -528,14 +558,14 @@ function App() {
       triggerParticles();
       setTotalScore(prev => prev + 1);
 
-      // 正解した動物のタワーから、弾（食べ物）を「掛け算の総数」分だけ発射！
+      // 正解した動物のタワーから、弾（食べ物）を連射！
       fireFoodProjectiles(currentQuestion);
 
       setTimeout(() => {
         setIsEating(false);
       }, 1500);
 
-      // 1.3秒後に自動的に次の問題へ進む！
+      // 1.3秒後に自動的に次の問題へ
       setTimeout(() => {
         nextQuestion();
       }, 1300);
@@ -543,44 +573,44 @@ function App() {
       playSound('wrong');
       setShowFeedback('wrong');
 
-      // 1.8秒後に自動的に「やりなおし」状態に戻して再入力できるようにする
+      // 1.8秒後に自動でフィードバックを消して再入力可能にする
       setTimeout(() => {
         setShowFeedback(null);
       }, 1800);
     }
   };
 
-  // 10. 食べ物弾の発射（ダダダダダッと連続発射する演出）
+  // 10. 食べ物弾の連射発射
   const fireFoodProjectiles = (q: Question) => {
-    const totalProjectiles = q.multiplier * q.multiplicand;
+    // 発射数: 掛け算は積 (multiplier * multiplicand), 引き算は引いた数 (multiplicand = あげた数)
+    const totalProjectiles = q.mode === 'multiplication'
+      ? q.multiplier * q.multiplicand
+      : q.multiplicand;
+
     const startX = ANIMALS[q.animal].towerX;
-    const startY = 25; // 道の上
+    const startY = 25;
 
     setAttackingTower(q.animal);
 
-    // 連射ディレイ処理
     let firedCount = 0;
     const interval = setInterval(() => {
-      // 画面内に残っている「まだ満腹になっていない」かつ「登場している(x<100)」オバケを取得
       let targetId = -1;
       setEnemies(currEnemies => {
         const alive = currEnemies.filter(e => !e.isSatiated && e.x < 100);
         if (alive.length > 0) {
-          // 最も左に進んでいる敵を最優先ターゲットにする
           const primary = alive.reduce((prev, curr) => prev.x < curr.x ? prev : curr);
           targetId = primary.id;
         }
         return currEnemies;
       });
 
-      // 弾を作成
       const newProj: Projectile = {
         id: Date.now() + firedCount,
         x: startX,
         y: startY,
         targetEnemyId: targetId,
         food: q.food,
-        speed: 1.5 // 移動速度
+        speed: 1.5
       };
 
       setProjectiles(prev => [...prev, newProj]);
@@ -589,9 +619,9 @@ function App() {
       firedCount++;
       if (firedCount >= totalProjectiles) {
         clearInterval(interval);
-        setTimeout(() => setAttackingTower(null), 300); // 攻撃モーション終了
+        setTimeout(() => setAttackingTower(null), 300);
       }
-    }, 120); // 120ms間隔で発射
+    }, 120);
   };
 
   // 11. 次の問題へ
@@ -599,11 +629,17 @@ function App() {
     setShowFeedback(null);
     setIsHappy(false);
     setPlacedPlates(0);
+    setRemovedIndices([]);
     setQuestionsAnswered(prev => prev + 1);
 
-    // 次の問題を生成してセット
     const q = generateQuestion(level);
     setCurrentQuestion(q);
+  };
+
+  // モード選択後のレベル選択画面へ
+  const selectMode = (mode: GameMode) => {
+    setGameMode(mode);
+    setScreen('level_select');
   };
 
   return (
@@ -641,7 +677,7 @@ function App() {
         <div className="title-screen">
           <div className="title-logo-container">
             <h1 className="title-logo">
-              たべもの かけざん
+              たべもの パズル防衛
               <span>〜オバケから ごちそうを まもろう！〜</span>
             </h1>
           </div>
@@ -660,41 +696,33 @@ function App() {
 
           <button 
             className="btn-kids btn-kids-primary" 
-            onClick={() => setScreen('level_select')}
+            onClick={() => setScreen('mode_select')}
           >
             あそぶ 🎮
           </button>
         </div>
       )}
 
-      {/* 2. レベル選択画面 */}
-      {screen === 'level_select' && (
-        <div className="level-select-screen">
-          <h2 className="level-title">どの だんで あそぶ？</h2>
+      {/* 1-b. 【新画面】モード選択画面 */}
+      {screen === 'mode_select' && (
+        <div className="mode-select-screen">
+          <h2 className="level-title">どちらの モードで あそぶ？</h2>
           
-          <div className="level-grid">
-            <div className="level-card lv-2" onClick={() => startGame(2)}>
-              <span className="level-card-icon">🥕</span>
-              <span className="level-card-title">２の だん</span>
-              <span className="level-card-desc">にんじんバズーカ (2発)</span>
+          <div className="mode-grid">
+            <div className="mode-card mode-mul" onClick={() => selectMode('multiplication')}>
+              <span className="mode-card-icon">🍎✖️</span>
+              <span className="mode-card-title">かけざん</span>
+              <span className="mode-card-desc">
+                お皿をならべて<br />掛け算をするよ！
+              </span>
             </div>
 
-            <div className="level-card lv-3" onClick={() => startGame(3)}>
-              <span className="level-card-icon">🍎</span>
-              <span className="level-card-title">３の だん</span>
-              <span className="level-card-desc">りんごバズーカ (3発)</span>
-            </div>
-
-            <div className="level-card lv-5" onClick={() => startGame(5)}>
-              <span className="level-card-icon">🍌</span>
-              <span className="level-card-title">５の だん</span>
-              <span className="level-card-desc">バナナバズーカ (5発)</span>
-            </div>
-
-            <div className="level-card lv-random" onClick={() => startGame('random')}>
-              <span className="level-card-icon">🌟</span>
-              <span className="level-card-title">いろいろ</span>
-              <span className="level-card-desc">いろいろ混ざって出るよ！</span>
+            <div className="mode-card mode-sub" onClick={() => selectMode('subtraction')}>
+              <span className="mode-card-icon">🥕➖</span>
+              <span className="mode-card-title">ひきざん</span>
+              <span className="mode-card-desc">
+                くだものをタップして消して<br />引き算をするよ！
+              </span>
             </div>
           </div>
 
@@ -704,7 +732,50 @@ function App() {
         </div>
       )}
 
-      {/* 3. ゲームプレイ画面 (タワーディフェンス + かけざん) */}
+      {/* 2. レベル選択画面 */}
+      {screen === 'level_select' && (
+        <div className="level-select-screen">
+          <h2 className="level-title">むずかしさを えらぼう</h2>
+          
+          <div className="level-grid">
+            <div className="level-card lv-2" onClick={() => startGame(2)}>
+              <span className="level-card-icon">🥕</span>
+              <span className="level-card-title">かんたん</span>
+              <span className="level-card-desc">
+                {gameMode === 'multiplication' ? '２の だん' : '５までの ひきざん'}
+              </span>
+            </div>
+
+            <div className="level-card lv-3" onClick={() => startGame(3)}>
+              <span className="level-card-icon">🍎</span>
+              <span className="level-card-title">ふつう</span>
+              <span className="level-card-desc">
+                {gameMode === 'multiplication' ? '３の だん' : '８までの ひきざん'}
+              </span>
+            </div>
+
+            <div className="level-card lv-5" onClick={() => startGame(5)}>
+              <span className="level-card-icon">🍌</span>
+              <span className="level-card-title">むずかしい</span>
+              <span className="level-card-desc">
+                {gameMode === 'multiplication' ? '５の だん' : '１０までの ひきざん'}
+              </span>
+            </div>
+
+            <div className="level-card lv-random" onClick={() => startGame('random')}>
+              <span className="level-card-icon">🌟</span>
+              <span className="level-card-title">いろいろ</span>
+              <span className="level-card-desc">いろいろ混ざって出るよ！</span>
+            </div>
+          </div>
+
+          <button className="btn-kids" onClick={() => setScreen('mode_select')}>
+            もどる ↩️
+          </button>
+        </div>
+      )}
+
+      {/* 3. ゲームプレイ画面 */}
       {screen === 'playing' && currentQuestion && (
         <div className="game-play-area">
           
@@ -714,17 +785,15 @@ function App() {
               ⬅️ やめる
             </button>
             
-            <div style={{ fontSize: '1.2rem', fontWeight: 800, color: 'var(--color-primary)' }}>
-              ウェーブ {wave} / 3
+            <div style={{ fontSize: '1.1rem', fontWeight: 800, color: 'var(--color-primary)' }}>
+              {gameMode === 'multiplication' ? 'かけざん' : 'ひきざん'} • ウェーブ {wave} / 3
             </div>
 
             <div className="stats-container">
-              {/* スコア表示 */}
               <div className="score-badge">
                 せいかい: {totalScore}
               </div>
 
-              {/* ライフ（ハート）表示 */}
               <div className="lives-display">
                 {Array.from({ length: 3 }).map((_, i) => (
                   <span 
@@ -738,14 +807,10 @@ function App() {
             </div>
           </div>
 
-          {/* ==========================================
-              【新要素】タワーディフェンス描画エリア
-              ========================================== */}
+          {/* タワーディフェンス描画エリア */}
           <div className="picnic-road-area">
-            {/* 道 */}
             <div className="road-path"></div>
 
-            {/* 左端の防衛テント */}
             <div className="picnic-tent">
               <span className="picnic-tent-label">ピクニック</span>
             </div>
@@ -788,7 +853,6 @@ function App() {
                   top: `${e.y}px`
                 }}
               >
-                {/* 満腹ゲージ */}
                 {!e.isSatiated && (
                   <div className="ghost-hp-bar-container">
                     <div 
@@ -798,7 +862,6 @@ function App() {
                   </div>
                 )}
 
-                {/* 満腹マーク */}
                 {e.isSatiated && (
                   <span className="ghost-satiated-label">ごちそうさまー！</span>
                 )}
@@ -835,93 +898,177 @@ function App() {
             </div>
             <div className="speech-bubble">
               <div className="speech-text">
-                {ANIMALS[currentQuestion.animal].name}「
-                <span className="highlight">{FOODS[currentQuestion.food].name}</span> が 
-                <span className="highlight">{currentQuestion.multiplier}こ</span> のったおさらを 
-                <span className="highlight">{currentQuestion.multiplicand}さら</span> ちょうだい！」
+                {gameMode === 'multiplication' ? (
+                  // 掛け算おねだり
+                  <>
+                    {ANIMALS[currentQuestion.animal].name}「
+                    <span className="highlight">{FOODS[currentQuestion.food].name}</span> が 
+                    <span className="highlight">{currentQuestion.multiplier}こ</span> のったおさらを 
+                    <span className="highlight">{currentQuestion.multiplicand}さら</span> ちょうだい！」
+                  </>
+                ) : (
+                  // 引き算おねだり
+                  <>
+                    {ANIMALS[currentQuestion.animal].name}「
+                    <span className="highlight">{FOODS[currentQuestion.food].name}</span> が 
+                    <span className="highlight">{currentQuestion.multiplier}こ</span> あるよ！ 
+                    オバケに <span className="highlight">{currentQuestion.multiplicand}こ</span> あげたら（引いたら）、のこりは いくつになるかな？」
+                  </>
+                )}
               </div>
             </div>
           </div>
 
           {/* 式とテーブル */}
           <div className="workspace-section">
+            {/* 数式 (動的プレビュー) */}
             <div className={`formula-display ${showFeedback === 'correct' ? 'correct-highlight' : ''}`}>
-              <div className="num-box target">{currentQuestion.multiplier}</div>
-              <div>×</div>
-              <div className="num-box target">
-                {showFeedback === 'correct' ? currentQuestion.multiplicand : '?'}
-              </div>
-              <div>＝</div>
-              <div className="num-box answer">
-                {showFeedback === 'correct' 
-                  ? currentQuestion.multiplier * currentQuestion.multiplicand 
-                  : '?'}
-              </div>
+              {gameMode === 'multiplication' ? (
+                // 掛け算
+                <>
+                  <div className="num-box target">{currentQuestion.multiplier}</div>
+                  <div>×</div>
+                  <div className="num-box target">
+                    {showFeedback === 'correct' ? currentQuestion.multiplicand : placedPlates}
+                  </div>
+                  <div>＝</div>
+                  <div className="num-box answer">
+                    {showFeedback === 'correct' 
+                      ? currentQuestion.multiplier * currentQuestion.multiplicand 
+                      : currentQuestion.multiplier * placedPlates}
+                  </div>
+                </>
+              ) : (
+                // 引き算 (minuend - subtrahend = difference)
+                // プレビュー: 最初 {multiplier} - 消した数 {removedIndices.length} = 残り
+                <>
+                  <div className="num-box target">{currentQuestion.multiplier}</div>
+                  <div>－</div>
+                  <div className="num-box target">
+                    {showFeedback === 'correct' ? currentQuestion.multiplicand : removedIndices.length}
+                  </div>
+                  <div>＝</div>
+                  <div className="num-box answer">
+                    {showFeedback === 'correct' 
+                      ? currentQuestion.multiplier - currentQuestion.multiplicand 
+                      : currentQuestion.multiplier - removedIndices.length}
+                  </div>
+                </>
+              )}
             </div>
 
-            {/* お皿テーブル (はみ出しバグ修正版) */}
+            {/* お皿テーブル */}
             <div className={`table-area ${showFeedback === 'correct' ? 'correct-highlight' : ''}`}>
-              {placedPlates === 0 && (
-                <div className="table-placeholder">
-                  下のおさらを タップして テーブルに ならべてね！<br />
-                  せいかいすると くだものが 飛んでいって オバケを満腹にするよ！
-                </div>
-              )}
-              {Array.from({ length: placedPlates }).map((_, i) => (
-                <div 
-                  key={i} 
-                  className="plate-item"
-                  onClick={removePlate}
-                  title="タップでおさらをかたづける"
-                >
-                  <div className="plate-index-badge">{i + 1}</div>
-                  <div className="plate-food-grid">
-                    {Array.from({ length: currentQuestion.multiplier }).map((_, foodIdx) => (
-                      <img 
-                        key={foodIdx} 
-                        src={FOODS[currentQuestion.food].img} 
-                        alt={FOODS[currentQuestion.food].name} 
-                        className="food-icon-small"
-                      />
-                    ))}
+              {gameMode === 'multiplication' ? (
+                // 掛け算テーブル (お皿を並べる)
+                <>
+                  {placedPlates === 0 && (
+                    <div className="table-placeholder">
+                      下のおさらを タップして テーブルに ならべてね！<br />
+                      せいかいすると 果物が飛んでいって オバケを満腹にするよ！
+                    </div>
+                  )}
+                  {Array.from({ length: placedPlates }).map((_, i) => (
+                    <div 
+                      key={i} 
+                      className="plate-item"
+                      onClick={removePlate}
+                      title="タップでおさらをかたづける"
+                    >
+                      <div className="plate-index-badge">{i + 1}</div>
+                      <div className="plate-food-grid">
+                        {Array.from({ length: currentQuestion.multiplier }).map((_, foodIdx) => (
+                          <img 
+                            key={foodIdx} 
+                            src={FOODS[currentQuestion.food].img} 
+                            alt={FOODS[currentQuestion.food].name} 
+                            className="food-icon-small"
+                          />
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </>
+              ) : (
+                // 引き算テーブル (最初から果物が並んでいて、タップして消す)
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '5px', width: '100%' }}>
+                  {removedIndices.length === 0 && (
+                    <div className="table-placeholder" style={{ marginBottom: '5px' }}>
+                      おさらの中の くだものを タップして、オバケにあげる分（{currentQuestion.multiplicand}こ）だけ 消してね！
+                    </div>
+                  )}
+                  <div className="subtraction-plate">
+                    <div className="plate-food-grid" style={{ width: '85%', height: '85%' }}>
+                      {Array.from({ length: currentQuestion.multiplier }).map((_, idx) => {
+                        const isRemoved = removedIndices.includes(idx);
+                        return (
+                          <img
+                            key={idx}
+                            src={FOODS[currentQuestion.food].img}
+                            alt={FOODS[currentQuestion.food].name}
+                            className={`sub-food-item ${isRemoved ? 'removed' : ''}`}
+                            onClick={() => toggleRemoveItem(idx)}
+                            title="タップして消す/もどす"
+                          />
+                        );
+                      })}
+                    </div>
                   </div>
                 </div>
-              ))}
+              )}
             </div>
           </div>
 
           {/* 操作棚 */}
           <div className="control-section">
             <div className="interactive-shelf">
-              <div className="shelf-item-container">
-                <button 
-                  className="btn-shelf-plate" 
-                  onClick={addPlate}
-                  aria-label="おさらを追加"
-                >
-                  <div className="plate-food-grid" style={{ width: '60%', height: '60%' }}>
-                    {Array.from({ length: currentQuestion.multiplier }).map((_, foodIdx) => (
-                      <img 
-                        key={foodIdx} 
-                        src={FOODS[currentQuestion.food].img} 
-                        alt={FOODS[currentQuestion.food].name} 
-                        className="food-icon-small"
-                      />
-                    ))}
+              {gameMode === 'multiplication' ? (
+                // かけざん用棚
+                <>
+                  <div className="shelf-item-container">
+                    <button 
+                      className="btn-shelf-plate" 
+                      onClick={addPlate}
+                      aria-label="おさらを追加"
+                    >
+                      <div className="plate-food-grid" style={{ width: '60%', height: '60%' }}>
+                        {Array.from({ length: currentQuestion.multiplier }).map((_, foodIdx) => (
+                          <img 
+                            key={foodIdx} 
+                            src={FOODS[currentQuestion.food].img} 
+                            alt={FOODS[currentQuestion.food].name} 
+                            className="food-icon-small"
+                          />
+                        ))}
+                      </div>
+                    </button>
+                    <div className="shelf-label">おさらを ならべる</div>
                   </div>
-                </button>
-                <div className="shelf-label">おさらを ならべる</div>
-              </div>
-              
-              {placedPlates > 0 && (
+                  
+                  {placedPlates > 0 && (
+                    <div className="shelf-item-container">
+                      <button 
+                        className="btn-kids btn-kids-accent"
+                        onClick={removePlate}
+                        style={{ padding: '8px 18px', fontSize: '1rem', borderRadius: '15px' }}
+                      >
+                        １さら かたづける
+                      </button>
+                    </div>
+                  )}
+                </>
+              ) : (
+                // ひきざん用棚
                 <div className="shelf-item-container">
                   <button 
-                    className="btn-kids btn-kids-accent"
-                    onClick={removePlate}
-                    style={{ padding: '8px 18px', fontSize: '1rem', borderRadius: '15px' }}
+                    className="btn-kids btn-kids-accent" 
+                    onClick={() => { setRemovedIndices([]); playSound('remove'); }}
+                    disabled={removedIndices.length === 0}
+                    style={{ opacity: removedIndices.length === 0 ? 0.6 : 1, padding: '12px 24px' }}
                   >
-                    １さら かたづける
+                    🔄 ぜんぶ 元にもどす
                   </button>
+                  <div className="shelf-label">くだものを 最初からやりなおす</div>
                 </div>
               )}
             </div>
@@ -930,15 +1077,17 @@ function App() {
               <button 
                 className="btn-kids btn-kids-success" 
                 onClick={checkAnswer}
-                disabled={placedPlates === 0}
-                style={{ opacity: placedPlates === 0 ? 0.6 : 1 }}
+                disabled={gameMode === 'multiplication' ? placedPlates === 0 : false}
+                style={{ 
+                  opacity: (gameMode === 'multiplication' && placedPlates === 0) ? 0.6 : 1 
+                }}
               >
                 できた！ 😋
               </button>
             </div>
           </div>
 
-          {/* 簡易お知らせ用フィードバック表示 (1.2秒〜1.8秒で自動消滅) */}
+          {/* 簡易お知らせ用フィードバック表示 */}
           {showFeedback && (
             <div className="quick-feedback-overlay">
               {showFeedback === 'correct' ? (
@@ -947,7 +1096,11 @@ function App() {
                     💮 せいかい！
                   </div>
                   <div className="quick-feedback-sub">
-                    {currentQuestion.multiplier} × {currentQuestion.multiplicand} ＝ {currentQuestion.multiplier * currentQuestion.multiplicand}
+                    {gameMode === 'multiplication' ? (
+                      <>{currentQuestion.multiplier} × {currentQuestion.multiplicand} ＝ {currentQuestion.multiplier * currentQuestion.multiplicand}</>
+                    ) : (
+                      <>{currentQuestion.multiplier} － {currentQuestion.multiplicand} ＝ {currentQuestion.multiplier - currentQuestion.multiplicand}</>
+                    )}
                   </div>
                 </>
               ) : (
@@ -956,7 +1109,9 @@ function App() {
                     🤔 あれれ？
                   </div>
                   <div className="quick-feedback-sub">
-                    おさらが {placedPlates > currentQuestion.multiplicand ? 'おおい' : 'すくない'}よ！もういちど！
+                    {gameMode === 'multiplication' 
+                      ? 'お皿の数がちがうよ！もういちど数えよう！' 
+                      : `オバケにあげる分（${currentQuestion.multiplicand}こ）だけタップして消してね！`}
                   </div>
                 </>
               )}
@@ -984,7 +1139,7 @@ function App() {
           </div>
 
           <div className="clear-stats">
-            <div>ウェーブ３を 全て防衛完了！</div>
+            <div>{gameMode === 'multiplication' ? 'かけざん' : 'ひきざん'}の ウェーブ３を防衛完了！</div>
             <div style={{ marginTop: '8px', fontSize: '1.1rem' }}>といた もんだい: {questionsAnswered} もん</div>
             <div className="clear-star-reward">
               {Array.from({ length: Math.min(totalScore, 5) }).map((_, i) => (
@@ -1029,7 +1184,7 @@ function App() {
         </div>
       )}
 
-      <p className="footer-text">たべもの かけざん - 5さいからの かけざんレッスン</p>
+      <p className="footer-text">たべもの かけざん • ひきざん - 5さいからの知育パズル</p>
     </div>
   );
 }

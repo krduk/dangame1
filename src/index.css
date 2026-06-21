@@ -179,6 +179,64 @@ body {
   color: white;
 }
 
+/* モード選択画面 */
+.mode-select-screen {
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  flex-grow: 1;
+}
+
+.mode-grid {
+  display: flex;
+  gap: 24px;
+  width: 100%;
+  max-width: 600px;
+  margin-bottom: 25px;
+  justify-content: center;
+}
+
+.mode-card {
+  flex: 1;
+  background: #fff;
+  border: var(--border-width) solid var(--color-text-dark);
+  border-radius: 24px;
+  padding: 24px;
+  cursor: pointer;
+  box-shadow: 0 8px 0 var(--color-text-dark);
+  transition: all 0.1s ease;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 15px;
+}
+
+.mode-card:active {
+  transform: translateY(6px);
+  box-shadow: 0 2px 0 var(--color-text-dark);
+}
+
+.mode-card.mode-mul { background-color: #ecf39e; }
+.mode-card.mode-sub { background-color: #ffccd5; }
+
+.mode-card-title {
+  font-size: 1.6rem;
+  font-weight: 800;
+  color: var(--color-text-dark);
+}
+
+.mode-card-icon {
+  font-size: 3.5rem;
+}
+
+.mode-card-desc {
+  font-size: 0.95rem;
+  line-height: 1.5;
+  color: var(--color-text);
+}
+
 /* レベル選択画面 */
 .level-select-screen {
   text-align: center;
@@ -317,11 +375,11 @@ body {
 }
 
 /* ==========================================================================
-   タワーディフェンス (ピクニックロード) エリア (コンパクト化)
+   タワーディフェンス (ピクニックロード) エリア
    ========================================================================== */
 .picnic-road-area {
   width: 100%;
-  height: 110px; /* 160pxから縮小 */
+  height: 110px;
   background-color: #a3cc5a;
   border: 3px solid #5a4b41;
   border-radius: 16px;
@@ -333,10 +391,10 @@ body {
 
 .road-path {
   position: absolute;
-  top: 35px; /* 55pxから調整 */
+  top: 35px;
   left: 0;
   width: 100%;
-  height: 40px; /* 50pxから縮小 */
+  height: 40px;
   background-color: #e6c280;
   border-top: 2px solid #cfa660;
   border-bottom: 2px solid #cfa660;
@@ -388,7 +446,7 @@ body {
 .tower-spot.monkey-tower { left: 80%; top: 5px; }
 
 .tower-avatar {
-  width: 38px; /* 48pxから縮小 */
+  width: 38px;
   height: 38px;
   border-radius: 50%;
   background: white;
@@ -414,7 +472,7 @@ body {
 /* いたずらオバケ */
 .ghost-enemy {
   position: absolute;
-  width: 40px; /* 50pxから縮小 */
+  width: 40px;
   height: 40px;
   z-index: 10;
   display: flex;
@@ -465,20 +523,20 @@ body {
 /* 食べ物弾 */
 .food-projectile {
   position: absolute;
-  width: 18px; /* 24pxから縮小 */
+  width: 18px;
   height: 18px;
   z-index: 15;
   object-fit: contain;
 }
 
 /* ==========================================================================
-   ゲームプレイ画面 下半部 (コンパクト化)
+   ゲームプレイ画面 下半部
    ========================================================================== */
 .game-play-area {
   display: flex;
   flex-direction: column;
   flex-grow: 1;
-  gap: 10px; /* 15pxから縮小 */
+  gap: 10px;
 }
 
 /* どうぶつのおねだり吹き出し */
@@ -487,13 +545,13 @@ body {
   align-items: center;
   gap: 10px;
   background: #fbf7f0;
-  padding: 6px 12px; /* 余白縮小 */
+  padding: 6px 12px;
   border-radius: 16px;
   border: 2px solid #f0e2d0;
 }
 
 .character-display {
-  width: 55px; /* 90pxから縮小 */
+  width: 55px;
   height: 55px;
   flex-shrink: 0;
 }
@@ -543,7 +601,7 @@ body {
 }
 
 .speech-text {
-  font-size: 1rem; /* 1.2remから縮小 */
+  font-size: 1rem;
   font-weight: 700;
   line-height: 1.4;
 }
@@ -558,7 +616,7 @@ body {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 8px; /* 12pxから縮小 */
+  gap: 8px;
   flex-grow: 1;
 }
 
@@ -566,7 +624,7 @@ body {
   display: flex;
   align-items: center;
   gap: 8px;
-  font-size: 1.6rem; /* 2remから縮小 */
+  font-size: 1.6rem;
   font-weight: 800;
   background: #fffbeb;
   border: 2px dashed var(--color-secondary);
@@ -602,10 +660,10 @@ body {
   background-color: #dcfce7;
 }
 
-/* お皿テーブル (コンパクト化) */
+/* お皿テーブル */
 .table-area {
   width: 100%;
-  min-height: 95px; /* 150pxから縮小 */
+  min-height: 95px;
   background: #d4a373;
   border: 4px solid #a67c52;
   border-radius: 16px;
@@ -624,12 +682,48 @@ body {
   line-height: 1.4;
 }
 
-/* お皿と果物 (はみ出し完全防止) */
+/* お皿と果物 */
 .plate-item {
-  width: 80px; /* 110pxからコンパクト化 */
+  width: 80px;
   height: 80px;
   border: 2px solid #e0e0e0;
   box-shadow: 0 4px 0px rgba(0, 0, 0, 0.15), var(--shadow-sm);
+}
+
+/* 引き算用の大きなお皿 */
+.subtraction-plate {
+  width: 120px;
+  height: 120px;
+  background: #fff;
+  border: 3px solid #e0e0e0;
+  border-radius: 50%;
+  box-shadow: 0 5px 0px rgba(0, 0, 0, 0.15), var(--shadow-sm);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  position: relative;
+  animation: pop 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+/* 引き算の果物アイテム */
+.sub-food-item {
+  width: 26px;
+  height: 26px;
+  object-fit: contain;
+  cursor: pointer;
+  transition: transform 0.15s, opacity 0.2s;
+  animation: pop 0.3s ease-out;
+  padding: 2px;
+}
+
+.sub-food-item:hover {
+  transform: scale(1.2);
+}
+
+.sub-food-item.removed {
+  opacity: 0.15;
+  transform: scale(0.85);
+  filter: grayscale(1) contrast(0.5);
 }
 
 .plate-index-badge {
@@ -641,7 +735,7 @@ body {
   border: 1.5px solid var(--color-text-dark);
 }
 
-/* 80pxのお皿の中に5個の果物を綺麗に収める設定 */
+/* お皿の中に果物を綺麗に収める設定 */
 .plate-food-grid {
   width: 60px;
   height: 60px;
@@ -654,7 +748,7 @@ body {
 }
 
 .food-icon-small {
-  width: 16px; /* 22pxから縮小 */
+  width: 16px;
   height: 16px;
 }
 
@@ -680,7 +774,7 @@ body {
 }
 
 .btn-shelf-plate {
-  width: 70px; /* 90pxから縮小 */
+  width: 70px;
   height: 70px;
   border: 2px solid var(--color-text-dark);
   box-shadow: 0 4px 0 var(--color-text-dark);
@@ -697,7 +791,7 @@ body {
   font-size: 0.85rem;
 }
 
-/* 簡易お知らせ用フィードバック表示（邪魔なダイアログを廃止） */
+/* 簡易お知らせ用フィードバック表示 (1.2秒〜1.8秒で自動消滅) */
 .quick-feedback-overlay {
   position: absolute;
   top: 50%;
@@ -725,7 +819,7 @@ body {
   margin-top: 5px;
 }
 
-/* 正解/不正解時のオーバーレイ (不正解時のみ2秒間自動消滅させる) */
+/* 正解/不正解時のオーバーレイ */
 .feedback-overlay {
   position: absolute;
   inset: 0;
