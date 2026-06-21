@@ -2,16 +2,18 @@ import { useState, useRef } from 'react';
 import './App.css';
 
 // 定数定義
+const BASE_URL = import.meta.env.BASE_URL || '/';
+
 const ANIMALS = {
-  rabbit: { name: 'うさぎさん', img: '/images/rabbit.jpg', color: '#ff7f50' },
-  bear: { name: 'くまさん', img: '/images/bear.jpg', color: '#ffb703' },
-  monkey: { name: 'さるさん', img: '/images/monkey.jpg', color: '#1982c4' }
+  rabbit: { name: 'うさぎさん', img: `${BASE_URL}images/rabbit.jpg`, color: '#ff7f50' },
+  bear: { name: 'くまさん', img: `${BASE_URL}images/bear.jpg`, color: '#ffb703' },
+  monkey: { name: 'さるさん', img: `${BASE_URL}images/monkey.jpg`, color: '#1982c4' }
 };
 
 const FOODS = {
-  carrot: { name: 'にんじん', emoji: '🥕', img: '/images/carrot.jpg' },
-  apple: { name: 'りんご', emoji: '🍎', img: '/images/apple.jpg' },
-  banana: { name: 'バナナ', emoji: '🍌', img: '/images/banana.jpg' }
+  carrot: { name: 'にんじん', emoji: '🥕', img: `${BASE_URL}images/carrot.jpg` },
+  apple: { name: 'りんご', emoji: '🍎', img: `${BASE_URL}images/apple.jpg` },
+  banana: { name: 'バナナ', emoji: '🍌', img: `${BASE_URL}images/banana.jpg` }
 };
 
 type Level = 2 | 3 | 5 | 'random';
@@ -343,13 +345,13 @@ function App() {
 
           <div className="mascot-parade">
             <div className="mascot-img-wrapper">
-              <img src="/images/rabbit.jpg" alt="うさぎ" className="mascot-img" />
+              <img src={`${BASE_URL}images/rabbit.jpg`} alt="うさぎ" className="mascot-img" />
             </div>
             <div className="mascot-img-wrapper" style={{ transform: 'scale(1.1) translateY(-10px)' }}>
-              <img src="/images/bear.jpg" alt="くま" className="mascot-img" />
+              <img src={`${BASE_URL}images/bear.jpg`} alt="くま" className="mascot-img" />
             </div>
             <div className="mascot-img-wrapper">
-              <img src="/images/monkey.jpg" alt="さる" className="mascot-img" />
+              <img src={`${BASE_URL}images/monkey.jpg`} alt="さる" className="mascot-img" />
             </div>
           </div>
 
@@ -579,13 +581,13 @@ function App() {
           
           <div className="clear-mascot-dance">
             <div className="mascot-img-wrapper">
-              <img src="/images/rabbit.jpg" alt="うさぎ" className="mascot-img" />
+              <img src={`${BASE_URL}images/rabbit.jpg`} alt="うさぎ" className="mascot-img" />
             </div>
             <div className="mascot-img-wrapper" style={{ width: '140px', height: '140px', transform: 'translateY(-10px)' }}>
-              <img src="/images/bear.jpg" alt="くま" className="mascot-img" />
+              <img src={`${BASE_URL}images/bear.jpg`} alt="くま" className="mascot-img" />
             </div>
             <div className="mascot-img-wrapper">
-              <img src="/images/monkey.jpg" alt="さる" className="mascot-img" />
+              <img src={`${BASE_URL}images/monkey.jpg`} alt="さる" className="mascot-img" />
             </div>
           </div>
 
