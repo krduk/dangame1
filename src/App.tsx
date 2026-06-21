@@ -321,11 +321,11 @@ function App() {
             left: `${p.x}px`,
             top: `${p.y}px`,
             color: p.color,
-            // CSSカスタムプロパティで移動先を指定
             // @ts-ignore
             '--tx': `${p.tx}px`,
+            // @ts-ignore
             '--ty': `${p.ty}px`
-          }}
+          } as React.CSSProperties}
         >
           {p.char}
         </span>
